@@ -142,7 +142,7 @@ void initialize()
 	
 	clear();
 	
-	print("Go!");
+	print("Maze");
 	
 	// Play music and wait for it to finish before we start driving.
 	play_from_program_space(go);
@@ -155,18 +155,18 @@ unsigned char path_length = 0;
 void turn(char dir) {
  switch(dir) { 
 	 case 'L': 
-		set_motors(-80,80); 
-		delay_ms(200); 
-		break; 
-		case 'R': 
+			set_motors(-80,80); 
+			delay_ms(200); 
+			break; 
+	case 'R': 
 			set_motors(80,-80); 
 			delay_ms(200); 
 			break; 
-		case 'B': 
+	case 'B': 
 			set_motors(80,-80); 
 			delay_ms(400); 
 			break; 
-		case 'S':
+	case 'S':
 			break; 
 		}
  }
@@ -191,7 +191,8 @@ void follow_segment() {
 		unsigned int position = read_line(sensors,IR_EMITTERS_ON);
 
 		int proportional = ((int)position) - 2000; 
-		int derivative = proportional - last_proportional; integral += proportional; 
+		int derivative = proportional - last_proportional; 
+		integral += proportional; 
 		last_proportional = proportional; 
 		int power_difference = proportional/20 + integral/10000 + derivative*3/2; 
 		const int max = 60; 
@@ -212,10 +213,47 @@ void follow_segment() {
 }
 }
 
+void simplify_path() {
+	if(path_length < 3 || path[path_length-2] != 'B') 
+		return; 
+	int total_angle = 0; 
+	int i; 
+	for(i=1;i<=3;i++) { 
+		switch(path[path_length-i]) { 
+			case 'R': 
+					total_angle += 90; 
+					break; 
+			case 'L': 
+					total_angle += 270; 
+					break; 
+			case 'B': 
+					total_angle += 180;
+					break; 
+			} 
+		} 
+		total_angle = total_angle % 360; 
+		switch(total_angle) {
+			 case 0:
+				 path[path_length - 3] = 'S'; 
+				 break; 
+			case 90: 
+				path[path_length - 3] = 'R';
+				break; 
+			case 180: 
+				path[path_length - 3] = 'B'; 
+				break; 
+			case 270: 
+				path[path_length - 3] = 'L'; 
+				break; 
+		} 
+		path_length -= 2; 
+	}
+
+
 int main()
 {
 	
-	
+	unsigned int sensors[5];
 	 initialize();
 
 	while(1)
@@ -229,7 +267,6 @@ int main()
 		unsigned char found_straight=0;
 		unsigned char found_right=0; 
 		
-		unsigned int sensors[5];
 		read_line(sensors,IR_EMITTERS_ON);
 		if(sensors[0] > 100) 
 			found_left = 1; 
@@ -240,12 +277,36 @@ int main()
 		read_line(sensors,IR_EMITTERS_ON); 
 		if(sensors[1] > 200 || sensors[2] > 200 || sensors[3] > 200) 
 			found_straight = 1;
-		if(sensors[1] > 600 && sensors[2] > 600 && sensors[3] > 600) 
-			break;  
+		if(sensors[1] > 650 && sensors[2] > 650 && sensors[3] > 650)
+			break;
 		unsigned char dir = select_turn(found_left, found_straight, found_right); 
 		turn(dir);
 		path[path_length] = dir; 
-		path_length ++; 
-
+		path_length++; 
+		simplify_path();
 	}
+	set_motors(0,0);
+	while(!button_is_pressed(BUTTON_B))
+	{
+	}
+	wait_for_button_release(BUTTON_B);
+	delay_ms(100);
+	while(1){
+		int i; 
+		for(i=0;i<path_length;i++) { 
+			follow_segment();
+			set_motors(50,50); 
+			delay_ms(50); 
+			set_motors(40,40); 
+			delay_ms(200); 
+			turn(path[i]); 
+		}
+		follow_segment();
+		if(sensors[1] > 900 && sensors[2] > 900 && sensors[3] > 900)
+			set_motors(50,50);
+			break;
+	}
+	
+	//follow_segment();
+	set_motors(0,0);
 }
